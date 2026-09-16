@@ -1,3 +1,3 @@
-module job-manager
+module github.com/sponez/job-manager
 
 go 1.27.1
