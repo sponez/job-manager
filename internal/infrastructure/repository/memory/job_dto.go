@@ -6,20 +6,20 @@ import (
 	"github.com/sponez/job-manager/internal/domain/job"
 )
 
-type JobDto struct {
+type JobDTO struct {
 	ID     uuid.UUID
 	Name   string
 	Status string
 }
 
-func JobDtofromDomain(j *job.Job) *JobDto {
-	return &JobDto{
-		ID:     j.Id(),
+func JobDTOFromDomain(j *job.Job) *JobDTO {
+	return &JobDTO{
+		ID:     j.ID(),
 		Name:   string(j.Name()),
 		Status: string(j.Status()),
 	}
 }
 
-func (j *JobDto) toDomain() (*job.Job, error) {
-	return job.TryNewJob(j.ID, j.Name, j.Status)
+func (j *JobDTO) toDomain() (*job.Job, error) {
+	return job.New(j.ID, job.Name(j.Name), job.Status(j.Status))
 }

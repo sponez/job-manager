@@ -5,7 +5,7 @@ import (
 	"uuid"
 )
 
-type Id = uuid.UUID
+type ID = uuid.UUID
 type Name string
 type Status string
 
@@ -23,34 +23,23 @@ var (
 )
 
 type Job struct {
-	id     Id
+	id     ID
 	name   Name
 	status Status
 }
 
-func NewJob(id Id, name Name, status Status) *Job {
-	return &Job{id, name, status}
-}
-
-func TryNewJob(id uuid.UUID, name string, status string) (*Job, error) {
-	var jName Name
-	var jStatus Status
+// New validates the job before constructing it.
+func New(id ID, name Name, status Status) (*Job, error) {
 	var errs []error
 
-	switch {
-	case name == string(NameSendEmail):
-		jName = NameSendEmail
-	case name == string(NameGetPage):
-		jName = NameGetPage
+	switch name {
+	case NameSendEmail, NameGetPage:
 	default:
 		errs = append(errs, ErrNameIsNotValid)
 	}
 
-	switch {
-	case status == string(StatusPending):
-		jStatus = StatusPending
-	case status == string(StatusDone):
-		jStatus = StatusDone
+	switch status {
+	case StatusPending, StatusDone:
 	default:
 		errs = append(errs, ErrStatusIsNotValid)
 	}
@@ -59,10 +48,10 @@ func TryNewJob(id uuid.UUID, name string, status string) (*Job, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	return &Job{id, jName, jStatus}, nil
+	return &Job{id: id, name: name, status: status}, nil
 }
 
-func (j *Job) Id() Id {
+func (j *Job) ID() ID {
 	return j.id
 }
 
@@ -74,6 +63,7 @@ func (j *Job) Status() Status {
 	return j.status
 }
 
-func (j *Job) UpdateStatus(s Status) *Job {
-	return &Job{j.id, j.name, s}
+// UpdateStatus returns a validated copy and leaves the original job unchanged.
+func (j *Job) UpdateStatus(s Status) (*Job, error) {
+	return New(j.id, j.name, s)
 }

@@ -1,7 +1,7 @@
 package job
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"uuid"
 
@@ -13,55 +13,48 @@ type JobService struct {
 }
 
 func New(jobRepository JobRepository) *JobService {
-	return &JobService{jobRepository}
+	return &JobService{jobRepository: jobRepository}
 }
 
-func (js *JobService) CreateJob(name string) (*job.Job, error) {
-	j, err := job.TryNewJob(uuid.New(), name, string(job.StatusPending))
+func (js *JobService) CreateJob(ctx context.Context, name string) (*job.Job, error) {
+	j, err := job.New(uuid.New(), job.Name(name), job.StatusPending)
 	if err != nil {
-		return nil, fmt.Errorf("job name is not valid")
+		return nil, fmt.Errorf("create job: %w", err)
 	}
 
-	if err := js.jobRepository.CreateJob(j); err != nil {
-		return nil, fmt.Errorf("error while creating a job: %w", err)
+	if err := js.jobRepository.CreateJob(ctx, j); err != nil {
+		return nil, fmt.Errorf("create job: %w", err)
 	}
 
 	return j, nil
 }
 
-func (js *JobService) GetJob(id uuid.UUID) (*job.Job, error) {
-	j, err := js.jobRepository.GetJob(id)
-
-	if errors.Is(err, ErrJobNotFound) {
-		return nil, fmt.Errorf("job %v is not found", id)
-	}
+func (js *JobService) GetJob(ctx context.Context, id uuid.UUID) (*job.Job, error) {
+	j, err := js.jobRepository.GetJob(ctx, id)
 
 	if err != nil {
-		return nil, fmt.Errorf("error while getting a job: %w", err)
+		return nil, fmt.Errorf("get job %s: %w", id, err)
 	}
 
 	return j, nil
 }
 
-func (js *JobService) CompleteJob(id uuid.UUID) error {
-	err := js.jobRepository.UpdateStatusById(id, job.StatusDone)
-
-	if errors.Is(err, ErrJobNotFound) {
-		return fmt.Errorf("job %v is not found", id)
-	}
+func (js *JobService) CompleteJob(ctx context.Context, id uuid.UUID) error {
+	err := js.jobRepository.UpdateStatusByID(ctx, id, job.StatusDone)
 
 	if err != nil {
-		return fmt.Errorf("error while completing job %v: %w", id, err)
+		return fmt.Errorf("complete job %s: %w", id, err)
 	}
 
 	return nil
 }
 
-func (js *JobService) ListJobs() ([]*job.Job, error) {
-	jobs, err := js.jobRepository.ListJobs()
+// ListJobs preserves partial results when some records cannot be read.
+func (js *JobService) ListJobs(ctx context.Context) ([]*job.Job, error) {
+	jobs, err := js.jobRepository.ListJobs(ctx)
 
 	if err != nil {
-		return nil, fmt.Errorf("error while getting jobs: %w", err)
+		return jobs, fmt.Errorf("list jobs: %w", err)
 	}
 
 	return jobs, nil

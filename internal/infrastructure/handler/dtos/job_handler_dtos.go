@@ -8,7 +8,7 @@ type JobResponse struct {
 
 // Create job
 type CreateJobInputBody struct {
-	Name string `json:"name"`
+	Name string `json:"name" example:"Send email" doc:"Job type: Send email or Get page"`
 }
 
 type CreateJobInput struct {
@@ -16,7 +16,8 @@ type CreateJobInput struct {
 }
 
 type CreateJobOutput struct {
-	Body JobResponse
+	Location string `header:"Location"`
+	Body     JobResponse
 }
 
 // Get job
@@ -38,6 +39,12 @@ type CompleteJobOutput struct{}
 // Get jobs
 type GetJobsInput struct{}
 
+type GetJobsOutputBody struct {
+	Jobs     []JobResponse `json:"jobs"`
+	Partial  bool          `json:"partial" doc:"True when some jobs could not be read"`
+	Warnings []string      `json:"warnings"`
+}
+
 type GetJobsOutput struct {
-	Body []JobResponse
+	Body GetJobsOutputBody
 }

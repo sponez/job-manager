@@ -10,7 +10,7 @@ type Server struct {
 }
 
 func New(handlers []handler.Handler) *Server {
-	return &Server{handlers}
+	return &Server{handlers: handlers}
 }
 
 func (s *Server) Register(api huma.API) {

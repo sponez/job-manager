@@ -1,6 +1,7 @@
 package job
 
 import (
+	"context"
 	"errors"
 	"uuid"
 
@@ -8,12 +9,15 @@ import (
 )
 
 var (
-	ErrJobNotFound = errors.New("job not found")
+	ErrJobNotFound      = errors.New("job not found")
+	ErrJobAlreadyExists = errors.New("job already exists")
 )
 
 type JobRepository interface {
-	CreateJob(j *job.Job) error
-	GetJob(id uuid.UUID) (*job.Job, error)
-	UpdateStatusById(id uuid.UUID, s job.Status) error
-	ListJobs() ([]*job.Job, error)
+	CreateJob(ctx context.Context, j *job.Job) error
+	GetJob(ctx context.Context, id uuid.UUID) (*job.Job, error)
+	UpdateStatusByID(ctx context.Context, id uuid.UUID, s job.Status) error
+	// ListJobs may return readable jobs together with errors for skipped records.
+	// Callers must inspect both results. Cancellation returns no jobs.
+	ListJobs(ctx context.Context) ([]*job.Job, error)
 }
