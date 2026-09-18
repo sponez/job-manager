@@ -1,32 +1,42 @@
 package main
 
 import (
-	"fmt"
-	"math/rand"
+	"net/http"
 
-	"github.com/sponez/job-manager/internal/domain/job"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	"github.com/sponez/job-manager/internal/apiserver"
+	"github.com/sponez/job-manager/internal/application/job"
+	"github.com/sponez/job-manager/internal/infrastructure/handler"
+	"github.com/sponez/job-manager/internal/infrastructure/repository/memory"
 )
 
 func main() {
-	var jobs []job.Job
-	var jobsNum = rand.Intn(10)
+	mux := http.NewServeMux()
 
-	for i := 0; i < jobsNum; i++ {
-		job := job.Job{
-			ID:     i + 1,
-			Name:   fmt.Sprintf("Job %v", i+1),
-			Status: job.StatusPending,
-		}
+	apiConfig := huma.DefaultConfig("Job Manager API", "1.0.0")
+	apiConfig.DocsRenderer = huma.DocsRendererSwaggerUI
 
-		jobs = append(jobs, job)
+	api := humago.New(mux, apiConfig)
+	handlers := handlers()
+	server := apiserver.New(handlers)
+
+	server.Register(api)
+	http.ListenAndServe(":8080", mux)
+}
+
+func handlers() []handler.Handler {
+	jobHandler := createJobHandler()
+
+	return []handler.Handler{
+		jobHandler,
 	}
+}
 
-	for _, job := range jobs {
-		fmt.Printf(
-			"%v | %v | %v\n",
-			job.ID,
-			job.Name,
-			job.Status,
-		)
-	}
+func createJobHandler() *handler.JobHandler {
+	jobRepository := memory.New()
+	jobService := job.New(jobRepository)
+	jobHandler := handler.NewJobHandler(jobService)
+
+	return jobHandler
 }
