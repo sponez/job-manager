@@ -14,13 +14,21 @@ import (
 	"github.com/sponez/job-manager/internal/infrastructure/handler/dtos"
 )
 
+// JobService describes the operations used by the HTTP handler.
+type JobService interface {
+	CreateJob(context.Context, string) (*domainjob.Job, error)
+	GetJob(context.Context, domainjob.ID) (*domainjob.Job, error)
+	CompleteJob(context.Context, domainjob.ID) error
+	ListJobs(context.Context) ([]*domainjob.Job, error)
+}
+
 type JobHandler struct {
-	jobService *job.JobService
+	jobService JobService
 }
 
 var _ apiserver.Handler = (*JobHandler)(nil)
 
-func NewJobHandler(jobService *job.JobService) *JobHandler {
+func NewJobHandler(jobService JobService) *JobHandler {
 	return &JobHandler{jobService: jobService}
 }
 
