@@ -6,16 +6,6 @@ import (
 )
 
 type ID = uuid.UUID
-type Kind string
-type Status string
-
-const (
-	StatusPending Status = "pending"
-	StatusDone    Status = "done"
-
-	KindSendEmail Kind = "Send email"
-	KindGetPage   Kind = "Get page"
-)
 
 var (
 	ErrKindIsNotValid   = errors.New("kind is not valid")
@@ -32,15 +22,11 @@ type Job struct {
 func New(id ID, kind Kind, status Status) (*Job, error) {
 	var errs []error
 
-	switch kind {
-	case KindSendEmail, KindGetPage:
-	default:
+	if !kind.Valid() {
 		errs = append(errs, ErrKindIsNotValid)
 	}
 
-	switch status {
-	case StatusPending, StatusDone:
-	default:
+	if !status.Valid() {
 		errs = append(errs, ErrStatusIsNotValid)
 	}
 
