@@ -10,12 +10,15 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/sponez/job-manager/internal/application/job"
 	domainjob "github.com/sponez/job-manager/internal/domain/job"
+	"github.com/sponez/job-manager/internal/infrastructure/apiserver"
 	"github.com/sponez/job-manager/internal/infrastructure/handler/dtos"
 )
 
 type JobHandler struct {
 	jobService *job.JobService
 }
+
+var _ apiserver.Handler = (*JobHandler)(nil)
 
 func NewJobHandler(jobService *job.JobService) *JobHandler {
 	return &JobHandler{jobService: jobService}
@@ -66,9 +69,9 @@ func (jh *JobHandler) Register(api huma.API) {
 }
 
 func (jh *JobHandler) createJob(ctx context.Context, input *dtos.CreateJobInput) (*dtos.CreateJobOutput, error) {
-	j, err := jh.jobService.CreateJob(ctx, input.Body.Name)
-	if errors.Is(err, domainjob.ErrNameIsNotValid) {
-		return nil, huma.Error422UnprocessableEntity("name must be Send email or Get page")
+	j, err := jh.jobService.CreateJob(ctx, input.Body.Kind)
+	if errors.Is(err, domainjob.ErrKindIsNotValid) {
+		return nil, huma.Error422UnprocessableEntity("kind must be Send email or Get page")
 	}
 	if err != nil {
 		return nil, jobHTTPError(ctx, err)
@@ -78,7 +81,7 @@ func (jh *JobHandler) createJob(ctx context.Context, input *dtos.CreateJobInput)
 		Location: "/jobs/" + j.ID().String(),
 		Body: dtos.JobResponse{
 			ID:     j.ID().String(),
-			Name:   string(j.Name()),
+			Kind:   string(j.Kind()),
 			Status: string(j.Status()),
 		},
 	}, nil
@@ -98,7 +101,7 @@ func (jh *JobHandler) getJob(ctx context.Context, input *dtos.GetJobInput) (*dto
 	return &dtos.GetJobOutput{
 		Body: dtos.JobResponse{
 			ID:     j.ID().String(),
-			Name:   string(j.Name()),
+			Kind:   string(j.Kind()),
 			Status: string(j.Status()),
 		},
 	}, nil
@@ -132,7 +135,7 @@ func (jh *JobHandler) getJobs(ctx context.Context, _ *dtos.GetJobsInput) (*dtos.
 	for _, j := range jobs {
 		jr := dtos.JobResponse{
 			ID:     j.ID().String(),
-			Name:   string(j.Name()),
+			Kind:   string(j.Kind()),
 			Status: string(j.Status()),
 		}
 		list = append(list, jr)

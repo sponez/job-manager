@@ -46,7 +46,7 @@ func (r *MemoryJobRepository) CreateJob(ctx context.Context, j *job.Job) error {
 	return nil
 }
 
-func (r *MemoryJobRepository) GetJob(ctx context.Context, id uuid.UUID) (*job.Job, error) {
+func (r *MemoryJobRepository) GetJob(ctx context.Context, id job.ID) (*job.Job, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -60,7 +60,7 @@ func (r *MemoryJobRepository) GetJob(ctx context.Context, id uuid.UUID) (*job.Jo
 	return nil, appjob.ErrJobNotFound
 }
 
-func (r *MemoryJobRepository) UpdateStatusByID(ctx context.Context, id uuid.UUID, s job.Status) error {
+func (r *MemoryJobRepository) UpdateStatusByID(ctx context.Context, id job.ID, s job.Status) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -68,15 +68,11 @@ func (r *MemoryJobRepository) UpdateStatusByID(ctx context.Context, id uuid.UUID
 		return err
 	}
 	if dto, ok := r.jobs[id]; ok {
-		j, err := dto.toDomain()
-		if err != nil {
-			return fmt.Errorf("decode job: %w", err)
+		r.jobs[id] = &JobDTO{
+			ID:     dto.ID,
+			Kind:   dto.Kind,
+			Status: string(s),
 		}
-		updated, err := j.UpdateStatus(s)
-		if err != nil {
-			return err
-		}
-		r.jobs[id] = JobDTOFromDomain(updated)
 		return nil
 	}
 

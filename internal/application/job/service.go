@@ -16,8 +16,8 @@ func New(jobRepository JobRepository) *JobService {
 	return &JobService{jobRepository: jobRepository}
 }
 
-func (js *JobService) CreateJob(ctx context.Context, name string) (*job.Job, error) {
-	j, err := job.New(uuid.New(), job.Name(name), job.StatusPending)
+func (js *JobService) CreateJob(ctx context.Context, kind string) (*job.Job, error) {
+	j, err := job.New(uuid.New(), job.Kind(kind), job.StatusPending)
 	if err != nil {
 		return nil, fmt.Errorf("create job: %w", err)
 	}
@@ -29,7 +29,7 @@ func (js *JobService) CreateJob(ctx context.Context, name string) (*job.Job, err
 	return j, nil
 }
 
-func (js *JobService) GetJob(ctx context.Context, id uuid.UUID) (*job.Job, error) {
+func (js *JobService) GetJob(ctx context.Context, id job.ID) (*job.Job, error) {
 	j, err := js.jobRepository.GetJob(ctx, id)
 
 	if err != nil {
@@ -39,7 +39,7 @@ func (js *JobService) GetJob(ctx context.Context, id uuid.UUID) (*job.Job, error
 	return j, nil
 }
 
-func (js *JobService) CompleteJob(ctx context.Context, id uuid.UUID) error {
+func (js *JobService) CompleteJob(ctx context.Context, id job.ID) error {
 	err := js.jobRepository.UpdateStatusByID(ctx, id, job.StatusDone)
 
 	if err != nil {

@@ -14,8 +14,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
-	"github.com/sponez/job-manager/internal/apiserver"
 	"github.com/sponez/job-manager/internal/application/job"
+	"github.com/sponez/job-manager/internal/infrastructure/apiserver"
 	"github.com/sponez/job-manager/internal/infrastructure/handler"
 	"github.com/sponez/job-manager/internal/infrastructure/repository/memory"
 )
@@ -94,10 +94,10 @@ func serve(ctx context.Context, server *http.Server, listener net.Listener) erro
 	return nil
 }
 
-func handlers() []handler.Handler {
+func handlers() []apiserver.Handler {
 	jobHandler := createJobHandler()
 
-	return []handler.Handler{
+	return []apiserver.Handler{
 		jobHandler,
 	}
 }

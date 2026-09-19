@@ -8,18 +8,18 @@ import (
 
 type JobDTO struct {
 	ID     uuid.UUID
-	Name   string
+	Kind   string
 	Status string
 }
 
 func JobDTOFromDomain(j *job.Job) *JobDTO {
 	return &JobDTO{
 		ID:     j.ID(),
-		Name:   string(j.Name()),
+		Kind:   string(j.Kind()),
 		Status: string(j.Status()),
 	}
 }
 
 func (j *JobDTO) toDomain() (*job.Job, error) {
-	return job.New(j.ID, job.Name(j.Name), job.Status(j.Status))
+	return job.New(j.ID, job.Kind(j.Kind), job.Status(j.Status))
 }

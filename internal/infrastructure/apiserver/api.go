@@ -2,14 +2,17 @@ package apiserver
 
 import (
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/sponez/job-manager/internal/infrastructure/handler"
 )
 
-type Server struct {
-	handlers []handler.Handler
+type Handler interface {
+	Register(api huma.API)
 }
 
-func New(handlers []handler.Handler) *Server {
+type Server struct {
+	handlers []Handler
+}
+
+func New(handlers []Handler) *Server {
 	return &Server{handlers: handlers}
 }
 

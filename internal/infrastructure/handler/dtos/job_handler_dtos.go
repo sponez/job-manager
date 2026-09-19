@@ -2,13 +2,13 @@ package dtos
 
 type JobResponse struct {
 	ID     string `json:"id"`
-	Name   string `json:"name"`
+	Kind   string `json:"kind"`
 	Status string `json:"status"`
 }
 
 // Create job
 type CreateJobInputBody struct {
-	Name string `json:"name" example:"Send email" doc:"Job type: Send email or Get page"`
+	Kind string `json:"kind" example:"Send email" doc:"Job type: Send email or Get page"`
 }
 
 type CreateJobInput struct {
