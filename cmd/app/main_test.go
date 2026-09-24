@@ -14,12 +14,27 @@ import (
 	"testing"
 	"time"
 	"uuid"
+
+	"github.com/sponez/job-manager/config"
 )
 
 // This is an integration test of application wiring: the handler, service and
 // in-memory repository are all real. Requests still run without a TCP server.
 func TestNewHandlerJobLifecycle(t *testing.T) {
-	h := newHandler()
+	t.Setenv("USE_POSTGRES", "false")
+	t.Setenv("HTTP_ADDR", ":8080")
+	t.Setenv("DB_URL", "invalid")
+	t.Setenv("VAULT_ADDR", "invalid")
+	cfg, err := config.LoadApp(t.Context())
+	if err != nil {
+		t.Fatalf("load memory config: %v", err)
+	}
+	repository, closeRepository, err := createJobRepository(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("create memory repository: %v", err)
+	}
+	t.Cleanup(closeRepository)
+	h := newHandler(buildHandlers(repository)...)
 	request := func(method, path, body string, wantStatus int) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -90,17 +105,13 @@ func TestNewHandlerJobLifecycle(t *testing.T) {
 	}
 }
 
-func TestRunListenError(t *testing.T) {
-	// An invalid address exercises startup failure without sending OS signals
-	// or calling main(), which could terminate the test process with os.Exit.
+func TestRunInvalidHTTPAddress(t *testing.T) {
+	// Invalid HTTP configuration must fail before contacting Vault or PostgreSQL.
+	t.Chdir(t.TempDir())
 	t.Setenv("HTTP_ADDR", "127.0.0.1:invalid:address")
 	err := run()
-	var opErr *net.OpError
-	if !errors.As(err, &opErr) {
-		t.Fatalf("run() error = %v, want wrapped network error", err)
-	}
-	if opErr.Op != "listen" {
-		t.Errorf("network operation = %q, want listen", opErr.Op)
+	if err == nil || !strings.Contains(err.Error(), "HTTP_ADDR") {
+		t.Fatalf("run() error = %v, want HTTP_ADDR validation error", err)
 	}
 }
 

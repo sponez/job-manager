@@ -14,10 +14,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
-	"github.com/sponez/job-manager/internal/application/job"
+	"github.com/sponez/job-manager/config"
 	"github.com/sponez/job-manager/internal/infrastructure/apiserver"
-	"github.com/sponez/job-manager/internal/infrastructure/handler"
-	"github.com/sponez/job-manager/internal/infrastructure/repository/memory"
 )
 
 func main() {
@@ -28,38 +26,52 @@ func main() {
 }
 
 func run() error {
+	if err := config.LoadEnv(); err != nil {
+		return err
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	addr := os.Getenv("HTTP_ADDR")
-	if addr == "" {
-		addr = ":8080"
+	cfg, err := config.LoadApp(ctx)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
 
+	startupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	repository, closeRepository, err := createJobRepository(startupCtx, cfg)
+	cancel()
+	if err != nil {
+		return err
+	}
+	// serve drains active requests before run closes repository resources.
+	defer closeRepository()
+
+	h := newHandler(buildHandlers(repository)...)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           newHandler(),
+		Addr:              cfg.HTTPAddr,
+		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
-		return fmt.Errorf("listen on %s: %w", addr, err)
+		return fmt.Errorf("listen on %s: %w", cfg.HTTPAddr, err)
 	}
 	slog.Info("server listening", "address", listener.Addr().String())
 	return serve(ctx, server, listener)
 }
 
-func newHandler() http.Handler {
+func newHandler(handlers ...apiserver.Handler) http.Handler {
 	mux := http.NewServeMux()
 
 	apiConfig := huma.DefaultConfig("Job Manager API", "1.0.0")
 	apiConfig.DocsRenderer = huma.DocsRendererSwaggerUI
 
 	api := humago.New(mux, apiConfig)
-	server := apiserver.New(handlers())
+	server := apiserver.New(handlers)
 
 	server.Register(api)
 	return mux
@@ -92,20 +104,4 @@ func serve(ctx context.Context, server *http.Server, listener net.Listener) erro
 		return fmt.Errorf("serve HTTP: %w", err)
 	}
 	return nil
-}
-
-func handlers() []apiserver.Handler {
-	jobHandler := createJobHandler()
-
-	return []apiserver.Handler{
-		jobHandler,
-	}
-}
-
-func createJobHandler() *handler.JobHandler {
-	jobRepository := memory.New()
-	jobService := job.New(jobRepository)
-	jobHandler := handler.NewJobHandler(jobService)
-
-	return jobHandler
 }
