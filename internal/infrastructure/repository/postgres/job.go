@@ -44,6 +44,9 @@ func (r *JobRepository) CreateJob(ctx context.Context, j *job.Job) error {
 }
 
 func (r *JobRepository) GetJob(ctx context.Context, id job.ID) (*job.Job, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	j, err := scanJob(r.db.QueryRow(ctx,
 		`SELECT id, kind, status FROM jobs WHERE id = $1`, databaseID(id)))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -59,9 +62,6 @@ func (r *JobRepository) UpdateStatusByID(ctx context.Context, id job.ID, status 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !status.Valid() {
-		return job.ErrStatusIsNotValid
-	}
 	tag, err := r.db.Exec(ctx, `UPDATE jobs SET status = $1 WHERE id = $2`,
 		string(status), databaseID(id))
 	if err != nil {
@@ -74,6 +74,9 @@ func (r *JobRepository) UpdateStatusByID(ctx context.Context, id job.ID, status 
 }
 
 func (r *JobRepository) ListJobs(ctx context.Context) ([]*job.Job, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	rows, err := r.db.Query(ctx, `SELECT id, kind, status FROM jobs ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list jobs: %w", queryError(ctx, err))
