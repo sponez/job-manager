@@ -19,4 +19,5 @@ type JobRepository interface {
 	// ListJobs may return readable jobs together with errors for skipped records.
 	// Callers must inspect both results. Cancellation returns no jobs.
 	ListJobs(ctx context.Context) ([]*job.Job, error)
+	DeleteJob(ctx context.Context, id job.ID) error
 }

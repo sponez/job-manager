@@ -212,6 +212,25 @@ func TestJobRepositoryListCorruptRecords(t *testing.T) {
 	}
 }
 
+func TestDeleteJob(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		ctx, repository := newTestJobRepository(t)
+		j := createTestJob(t, ctx, repository, job.KindGetPage, job.StatusPending)
+
+		if rj, err := repository.GetJob(ctx, j.ID()); rj == nil || err != nil {
+			t.Fatalf("failed to create a job")
+		} else {
+			requireSameJob(t, rj, j)
+		}
+
+		repository.DeleteJob(ctx, j.ID())
+
+		if rj, err := repository.GetJob(ctx, j.ID()); err != appjob.ErrJobNotFound {
+			t.Errorf("DeleteJob() expected %v to be deleted, but this not happened", rj)
+		}
+	})
+}
+
 func TestJobRepositoryDatabaseErrors(t *testing.T) {
 	sharedPool := repositoryTestPool(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
@@ -316,6 +335,9 @@ func TestRepositoryCanceledContext(t *testing.T) {
 			}
 			if got, err := r.ListJobs(ctx); got != nil || !errors.Is(err, tt.wantErr) {
 				t.Errorf("ListJobs() = %v, %v, want nil, %v", got, err, tt.wantErr)
+			}
+			if err := r.DeleteJob(ctx, j.ID()); !errors.Is(err, tt.wantErr) {
+				t.Errorf("DeleteJob() error = %v, want %v", err, tt.wantErr)
 			}
 			// Check that rejected writes left storage unchanged, using a live context.
 			jobs, err := r.ListJobs(originalCtx)

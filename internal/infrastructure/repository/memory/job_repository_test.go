@@ -202,6 +202,27 @@ func TestListJobs(t *testing.T) {
 	}
 }
 
+func TestDeleteJob(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		ctx := context.Background()
+		r := New()
+		j := newTestJob(t, uuid.New(), job.KindGetPage, job.StatusPending)
+		r.CreateJob(ctx, j)
+
+		if rj, err := r.GetJob(ctx, j.ID()); rj == nil || err != nil {
+			t.Fatalf("failed to create a job")
+		} else {
+			requireSameJob(t, rj, j)
+		}
+
+		r.DeleteJob(ctx, j.ID())
+
+		if rj, err := r.GetJob(ctx, j.ID()); err != appjob.ErrJobNotFound {
+			t.Errorf("DeleteJob() expected %v to be deleted, but this not happened", rj)
+		}
+	})
+}
+
 func TestRepositoryCanceledContext(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -247,6 +268,9 @@ func TestRepositoryCanceledContext(t *testing.T) {
 			if got, err := r.ListJobs(ctx); got != nil || !errors.Is(err, tt.wantErr) {
 				t.Errorf("ListJobs() = %v, %v, want nil, %v", got, err, tt.wantErr)
 			}
+			if err := r.DeleteJob(ctx, original.ID()); !errors.Is(err, tt.wantErr) {
+				t.Errorf("DeleteJob error = %v, want %v", err, tt.wantErr)
+			}
 			// Check that rejected writes left storage unchanged, using a live context.
 			jobs, err := r.ListJobs(context.Background())
 			if err != nil || len(jobs) != 1 {
@@ -287,6 +311,10 @@ func TestRepositoryConcurrentAccess(t *testing.T) {
 			}
 			if _, err := r.ListJobs(ctx); err != nil {
 				errs <- fmt.Errorf("list: %w", err)
+				return
+			}
+			if err := r.DeleteJob(ctx, j.ID()); err != nil {
+				errs <- fmt.Errorf("delete: %w", err)
 			}
 		}(j)
 	}
@@ -297,12 +325,7 @@ func TestRepositoryConcurrentAccess(t *testing.T) {
 		t.Error(err)
 	}
 	got, err := r.ListJobs(ctx)
-	if err != nil || len(got) != workers {
-		t.Fatalf("ListJobs() count = %d, error = %v, want %d jobs", len(got), err, workers)
-	}
-	for _, j := range got {
-		if j.Status() != job.StatusDone {
-			t.Errorf("job %s status = %q, want done", j.ID(), j.Status())
-		}
+	if err != nil || len(got) != 0 {
+		t.Fatalf("ListJobs() count = %d, error = %v, want empty repository", len(got), err)
 	}
 }
