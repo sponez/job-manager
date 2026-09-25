@@ -108,3 +108,16 @@ func (r *MemoryJobRepository) ListJobs(ctx context.Context) ([]*job.Job, error) 
 
 	return dJobs, nil
 }
+
+func (r *MemoryJobRepository) DeleteJob(ctx context.Context, id job.ID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	delete(r.jobs, id)
+
+	return nil
+}

@@ -106,6 +106,17 @@ func (r *JobRepository) ListJobs(ctx context.Context) ([]*job.Job, error) {
 	return jobs, errors.Join(skipped...)
 }
 
+func (r *JobRepository) DeleteJob(ctx context.Context, id job.ID) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	_, err := r.db.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, databaseID(id))
+	if err != nil {
+		return fmt.Errorf("update job status: %w", queryError(ctx, err))
+	}
+	return nil
+}
+
 func scanJob(row pgx.Row) (*job.Job, error) {
 	var id pgtype.UUID
 	var kind, status string

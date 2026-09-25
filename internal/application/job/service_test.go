@@ -16,6 +16,7 @@ type jobRepositoryStub struct {
 	getJob           func(ctx context.Context, id job.ID) (*job.Job, error)
 	updateStatusByID func(ctx context.Context, id job.ID, s job.Status) error
 	listJobs         func(ctx context.Context) ([]*job.Job, error)
+	deleteJob        func(ctx context.Context, id job.ID) error
 }
 
 func (r *jobRepositoryStub) CreateJob(ctx context.Context, j *job.Job) error {
@@ -48,6 +49,14 @@ func (r *jobRepositoryStub) ListJobs(ctx context.Context) ([]*job.Job, error) {
 		r.t.Fatal("unexpected repository ListJobs call")
 	}
 	return r.listJobs(ctx)
+}
+
+func (r *jobRepositoryStub) DeleteJob(ctx context.Context, id job.ID) error {
+	r.t.Helper()
+	if r.deleteJob == nil {
+		r.t.Fatal("unexpected repository DeleteJob call")
+	}
+	return r.deleteJob(ctx, id)
 }
 
 func TestCreateJob(t *testing.T) {

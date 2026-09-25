@@ -5,10 +5,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 	"uuid"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/sponez/job-manager/internal/application/job"
+	"github.com/sponez/job-manager/internal/application/worker"
 	domainjob "github.com/sponez/job-manager/internal/domain/job"
 	"github.com/sponez/job-manager/internal/infrastructure/apiserver"
 	"github.com/sponez/job-manager/internal/infrastructure/handler/dtos"
@@ -20,16 +22,25 @@ type JobService interface {
 	GetJob(context.Context, domainjob.ID) (*domainjob.Job, error)
 	CompleteJob(context.Context, domainjob.ID) error
 	ListJobs(context.Context) ([]*domainjob.Job, error)
+	DeleteJob(context.Context, domainjob.ID) error
+	ProcessJob(context.Context, domainjob.ID)
+}
+
+// TaskQueue accepts work for background execution.
+type TaskQueue interface {
+	Push(context.Context, worker.Task) error
 }
 
 type JobHandler struct {
+	wp TaskQueue
+
 	jobService JobService
 }
 
 var _ apiserver.Handler = (*JobHandler)(nil)
 
-func NewJobHandler(jobService JobService) *JobHandler {
-	return &JobHandler{jobService: jobService}
+func NewJobHandler(jobService JobService, queue TaskQueue) *JobHandler {
+	return &JobHandler{jobService: jobService, wp: queue}
 }
 
 func (jh *JobHandler) Register(api huma.API) {
@@ -44,6 +55,7 @@ func (jh *JobHandler) Register(api huma.API) {
 		Errors: []int{
 			http.StatusBadRequest, http.StatusUnprocessableEntity, http.StatusConflict,
 			http.StatusRequestEntityTooLarge, http.StatusRequestTimeout, http.StatusGatewayTimeout,
+			http.StatusServiceUnavailable,
 		},
 	}, jh.createJob)
 
@@ -83,6 +95,12 @@ func (jh *JobHandler) createJob(ctx context.Context, input *dtos.CreateJobInput)
 	}
 	if err != nil {
 		return nil, jobHTTPError(ctx, err)
+	}
+
+	if err := jh.wp.Push(ctx, func(ctx context.Context) {
+		jh.jobService.ProcessJob(ctx, j.ID())
+	}); err != nil {
+		return nil, jh.failJobCreation(ctx, j.ID(), err)
 	}
 
 	return &dtos.CreateJobOutput{
@@ -171,5 +189,25 @@ func jobHTTPError(ctx context.Context, err error) error {
 	default:
 		slog.ErrorContext(ctx, "job operation failed", "error", err)
 		return huma.Error500InternalServerError("internal server error")
+	}
+}
+
+func (jh *JobHandler) failJobCreation(ctx context.Context, id domainjob.ID, enqueueErr error) error {
+	// A disconnected client must not prevent compensation for a rejected task.
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := jh.jobService.DeleteJob(cleanupCtx, id); err != nil {
+		slog.ErrorContext(cleanupCtx, "revert job creation failed", "job_id", id,
+			"error", err, "enqueue_error", enqueueErr)
+		return huma.Error500InternalServerError("internal server error")
+	}
+
+	switch {
+	case errors.Is(enqueueErr, worker.ErrQueueIsFull):
+		return huma.Error503ServiceUnavailable("the service is overloaded, please try again later")
+	case errors.Is(enqueueErr, worker.ErrClosed):
+		return huma.Error503ServiceUnavailable("the service is shutting down")
+	default:
+		return jobHTTPError(ctx, enqueueErr)
 	}
 }

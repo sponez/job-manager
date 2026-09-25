@@ -22,7 +22,7 @@ import (
 func newTestRouter(service JobService) http.Handler {
 	mux := http.NewServeMux()
 	api := humago.New(mux, huma.DefaultConfig("Job handler tests", "1.0.0"))
-	NewJobHandler(service).Register(api)
+	NewJobHandler(service, &taskQueueStub{}).Register(api)
 	return mux
 }
 

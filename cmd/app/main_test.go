@@ -12,15 +12,21 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 	"uuid"
 
 	"github.com/sponez/job-manager/config"
+	"github.com/sponez/job-manager/internal/application/worker"
 )
 
 // This is an integration test of application wiring: the handler, service and
 // in-memory repository are all real. Requests still run without a TCP server.
 func TestNewHandlerJobLifecycle(t *testing.T) {
+	synctest.Test(t, testNewHandlerJobLifecycle)
+}
+
+func testNewHandlerJobLifecycle(t *testing.T) {
 	t.Setenv("USE_POSTGRES", "false")
 	t.Setenv("HTTP_ADDR", ":8080")
 	t.Setenv("DB_URL", "invalid")
@@ -34,10 +40,20 @@ func TestNewHandlerJobLifecycle(t *testing.T) {
 		t.Fatalf("create memory repository: %v", err)
 	}
 	t.Cleanup(closeRepository)
-	h := newHandler(buildHandlers(repository)...)
+	pool, err := worker.New(2, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+	h := newHandler(buildHandlers(repository, pool)...)
 	request := func(method, path, body string, wantStatus int) *httptest.ResponseRecorder {
 		t.Helper()
-		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		requestCtx, cancelRequest := context.WithCancel(context.Background())
+		defer cancelRequest()
+		req := httptest.NewRequestWithContext(requestCtx, method, path, strings.NewReader(body))
 		if body != "" {
 			req.Header.Set("Content-Type", "application/json")
 		}
@@ -68,14 +84,17 @@ func TestNewHandlerJobLifecycle(t *testing.T) {
 	if location := created.Header().Get("Location"); location != path {
 		t.Errorf("Location = %q, want %q", location, path)
 	}
+	// HTTP request contexts have ended, but accepted background work must finish.
+	// synctest advances the simulated work's timer without a real 15-second wait.
+	pool.Shutdown()
 
 	read := request(http.MethodGet, path, "", http.StatusOK)
 	var stored jobResponse
 	if err := json.Unmarshal(read.Body.Bytes(), &stored); err != nil {
 		t.Fatalf("decode stored job: %v", err)
 	}
-	if stored != j {
-		t.Errorf("stored job = %+v, want %+v", stored, j)
+	if stored.ID != j.ID || stored.Kind != j.Kind || (stored.Status != "done" && stored.Status != "error") {
+		t.Errorf("stored job = %+v, want completed background work", stored)
 	}
 
 	completed := request(http.MethodPost, path+"/complete", "", http.StatusNoContent)
