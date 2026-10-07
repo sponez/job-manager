@@ -174,8 +174,7 @@ func TestGetJob(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			id := uuid.New()
 			calls := 0
 			repo := &jobRepositoryStub{
@@ -220,8 +219,7 @@ func TestCompleteJob(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			id := uuid.New()
 			calls := 0
 			repo := &jobRepositoryStub{

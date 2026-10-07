@@ -131,8 +131,7 @@ func TestJobHandlerCreateJob(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			calls := 0
 			service := &jobServiceStub{t: t, createJob: func(gotCtx context.Context, kind string) (*domainjob.Job, error) {
 				calls++
@@ -181,8 +180,7 @@ func TestCreateJobExecutesWithWorkerContext(t *testing.T) {
 	j := newTestJob(t, domainjob.KindGetPage, domainjob.StatusPending)
 	requestCtx, cancelRequest := context.WithCancel(context.Background())
 	defer cancelRequest()
-	workerCtx, cancelWorker := context.WithCancel(context.Background())
-	defer cancelWorker()
+	workerCtx := t.Context()
 	processed := false
 	service := &jobServiceStub{
 		t:         t,
@@ -291,8 +289,7 @@ func TestJobHandlerGetJob(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			calls := 0
 			service := &jobServiceStub{t: t, getJob: func(gotCtx context.Context, id domainjob.ID) (*domainjob.Job, error) {
 				calls++
@@ -341,8 +338,7 @@ func TestJobHandlerCompleteJob(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			calls := 0
 			service := &jobServiceStub{t: t, completeJob: func(gotCtx context.Context, gotID domainjob.ID) error {
 				calls++
@@ -405,8 +401,7 @@ func TestJobHandlerGetJobs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			calls := 0
 			service := &jobServiceStub{t: t, listJobs: func(gotCtx context.Context) ([]*domainjob.Job, error) {
 				calls++
