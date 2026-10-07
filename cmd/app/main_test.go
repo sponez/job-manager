@@ -2,127 +2,16 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
-	"testing/synctest"
 	"time"
-	"uuid"
-
-	"github.com/sponez/job-manager/config"
-	"github.com/sponez/job-manager/internal/application/worker"
 )
-
-// This is an integration test of application wiring: the handler, service and
-// in-memory repository are all real. Requests still run without a TCP server.
-func TestNewHandlerJobLifecycle(t *testing.T) {
-	synctest.Test(t, testNewHandlerJobLifecycle)
-}
-
-func testNewHandlerJobLifecycle(t *testing.T) {
-	t.Setenv("USE_POSTGRES", "false")
-	t.Setenv("HTTP_ADDR", ":8080")
-	t.Setenv("DB_URL", "invalid")
-	t.Setenv("VAULT_ADDR", "invalid")
-	cfg, err := config.LoadApp(t.Context())
-	if err != nil {
-		t.Fatalf("load memory config: %v", err)
-	}
-	repository, closeRepository, err := createJobRepository(t.Context(), cfg)
-	if err != nil {
-		t.Fatalf("create memory repository: %v", err)
-	}
-	t.Cleanup(closeRepository)
-	pool, err := worker.New(2, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := pool.Start(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Shutdown)
-	h := newHandler(buildHandlers(repository, pool)...)
-	request := func(method, path, body string, wantStatus int) *httptest.ResponseRecorder {
-		t.Helper()
-		requestCtx, cancelRequest := context.WithCancel(context.Background())
-		defer cancelRequest()
-		req := httptest.NewRequestWithContext(requestCtx, method, path, strings.NewReader(body))
-		if body != "" {
-			req.Header.Set("Content-Type", "application/json")
-		}
-		resp := httptest.NewRecorder()
-		h.ServeHTTP(resp, req)
-		if resp.Code != wantStatus {
-			t.Fatalf("%s %s: status = %d, want %d; body = %s", method, path, resp.Code, wantStatus, resp.Body.String())
-		}
-		return resp
-	}
-	type jobResponse struct {
-		ID     string `json:"id"`
-		Kind   string `json:"kind"`
-		Status string `json:"status"`
-	}
-	created := request(http.MethodPost, "/jobs", `{"kind":"Send email"}`, http.StatusCreated)
-	var j jobResponse
-	if err := json.Unmarshal(created.Body.Bytes(), &j); err != nil {
-		t.Fatalf("decode created job: %v", err)
-	}
-	if _, err := uuid.Parse(j.ID); err != nil {
-		t.Fatalf("created job ID = %q, want UUID: %v", j.ID, err)
-	}
-	if j.Kind != "Send email" || j.Status != "pending" {
-		t.Fatalf("created job = %+v, want pending email", j)
-	}
-	path := "/jobs/" + j.ID
-	if location := created.Header().Get("Location"); location != path {
-		t.Errorf("Location = %q, want %q", location, path)
-	}
-	// HTTP request contexts have ended, but accepted background work must finish.
-	// synctest advances the simulated work's timer without a real 15-second wait.
-	pool.Shutdown()
-
-	read := request(http.MethodGet, path, "", http.StatusOK)
-	var stored jobResponse
-	if err := json.Unmarshal(read.Body.Bytes(), &stored); err != nil {
-		t.Fatalf("decode stored job: %v", err)
-	}
-	if stored.ID != j.ID || stored.Kind != j.Kind || (stored.Status != "done" && stored.Status != "error") {
-		t.Errorf("stored job = %+v, want completed background work", stored)
-	}
-
-	completed := request(http.MethodPost, path+"/complete", "", http.StatusNoContent)
-	if completed.Body.Len() != 0 {
-		t.Errorf("complete response body = %q, want empty", completed.Body.String())
-	}
-	read = request(http.MethodGet, path, "", http.StatusOK)
-	if err := json.Unmarshal(read.Body.Bytes(), &stored); err != nil {
-		t.Fatalf("decode completed job: %v", err)
-	}
-	j.Status = "done"
-	if stored != j {
-		t.Errorf("completed job = %+v, want %+v", stored, j)
-	}
-
-	listed := request(http.MethodGet, "/jobs", "", http.StatusOK)
-	var list struct {
-		Jobs     []jobResponse `json:"jobs"`
-		Partial  bool          `json:"partial"`
-		Warnings []string      `json:"warnings"`
-	}
-	if err := json.Unmarshal(listed.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decode job list: %v", err)
-	}
-	if len(list.Jobs) != 1 || list.Jobs[0] != j || list.Partial || len(list.Warnings) != 0 {
-		t.Errorf("unexpected job list: %+v", list)
-	}
-}
 
 func TestRunInvalidHTTPAddress(t *testing.T) {
 	// Invalid HTTP configuration must fail before contacting Vault or PostgreSQL.

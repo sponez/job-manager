@@ -15,10 +15,9 @@ import (
 )
 
 type AppConfig struct {
-	UsePostgres bool
-	Database    DatabaseConfig
-	Pool        PoolConfig
-	HTTPAddr    string
+	Database DatabaseConfig
+	Pool     PoolConfig
+	HTTPAddr string
 }
 
 type DatabaseConfig struct {
@@ -48,14 +47,6 @@ func loadApp(ctx context.Context, readSecrets secretReader) (AppConfig, error) {
 	if err != nil || strings.ContainsAny(host, " \t\r\n/?#@") || !validPort(port, true) {
 		return AppConfig{}, errors.New("HTTP_ADDR must be a host:port address with a port between 0 and 65535")
 	}
-	cfg.UsePostgres, err = strconv.ParseBool(envOrDefault("USE_POSTGRES", "true"))
-	if err != nil {
-		return AppConfig{}, errors.New("USE_POSTGRES must be a boolean, such as true or false")
-	}
-	if !cfg.UsePostgres {
-		return cfg, nil
-	}
-
 	cfg.Pool.MaxConns, err = envInt32("DB_MAX_CONNS", "10")
 	if err != nil {
 		return AppConfig{}, err

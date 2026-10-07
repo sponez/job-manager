@@ -55,5 +55,5 @@ CREATE TABLE workflow_steps (
 );
 
 -- +goose Down
-DROP TABLE workflows;
 DROP TABLE workflow_steps;
+DROP TABLE workflows;

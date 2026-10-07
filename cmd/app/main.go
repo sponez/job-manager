@@ -15,7 +15,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/sponez/job-manager/config"
-	"github.com/sponez/job-manager/internal/application/worker"
 	"github.com/sponez/job-manager/internal/infrastructure/apiserver"
 )
 
@@ -40,26 +39,14 @@ func run() error {
 	}
 
 	startupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	repository, closeRepository, err := createJobRepository(startupCtx, cfg)
+	dbPool, err := createDB(startupCtx, cfg.Database, cfg.Pool)
 	cancel()
 	if err != nil {
-		return err
+		return fmt.Errorf("initialize postgres: %w", err)
 	}
-	// Deferred cleanup runs in reverse order: HTTP, workers, then repository.
-	defer closeRepository()
+	defer dbPool.Close()
 
-	pool, err := worker.New(4, 4)
-	if err != nil {
-		return fmt.Errorf("create worker pool: %w", err)
-	}
-	// The signal stops HTTP admission first. Keep task contexts alive so that
-	// Shutdown can drain accepted work before repository resources are closed.
-	if err := pool.Start(context.WithoutCancel(ctx)); err != nil {
-		return fmt.Errorf("start worker pool: %w", err)
-	}
-	defer pool.Shutdown()
-
-	h := newHandler(buildHandlers(repository, pool)...)
+	h := newHandler()
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           h,
