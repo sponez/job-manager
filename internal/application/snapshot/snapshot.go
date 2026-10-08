@@ -20,3 +20,7 @@ type Store interface {
 	Save(ctx context.Context, workflowID uuid.UUID, value Snapshot) error
 	Delete(ctx context.Context, workflowID uuid.UUID) error
 }
+
+type Reader interface {
+	Exists(ctx context.Context, workflowID uuid.UUID) (bool, error)
+}

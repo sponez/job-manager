@@ -57,8 +57,7 @@ func (c *Client) Fetch(ctx context.Context, rawURL string) (snapshot.Snapshot, e
 		if ctx.Err() != nil {
 			return snapshot.Snapshot{}, ctx.Err()
 		}
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
+		if urlErr, ok := errors.AsType[*url.Error](err); ok {
 			err = urlErr.Err
 		}
 		return snapshot.Snapshot{}, fmt.Errorf("fetch snapshot: %w", err)

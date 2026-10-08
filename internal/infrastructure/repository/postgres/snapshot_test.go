@@ -22,9 +22,15 @@ func TestSnapshotRepositorySaveAndCompensate(t *testing.T) {
 	t.Cleanup(func() { _, _ = db.Exec(context.Background(), `DELETE FROM workflows WHERE id = $1`, dbID) })
 
 	repository := NewSnapshotRepository(db)
+	if exists, err := repository.Exists(ctx, id); err != nil || exists {
+		t.Fatalf("snapshot exists before save = %v, %v", exists, err)
+	}
 	value := snapshot.Snapshot{SourceURL: "https://example.com/page", ContentType: "text/html", Body: []byte("first")}
 	if err := repository.Save(ctx, id, value); err != nil {
 		t.Fatal(err)
+	}
+	if exists, err := repository.Exists(ctx, id); err != nil || !exists {
+		t.Fatalf("snapshot exists after save = %v, %v", exists, err)
 	}
 	value.Body = []byte("second")
 	if err := repository.Save(ctx, id, value); err != nil {
@@ -41,6 +47,9 @@ func TestSnapshotRepositorySaveAndCompensate(t *testing.T) {
 		if err := repository.Delete(ctx, id); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if exists, err := repository.Exists(ctx, id); err != nil || exists {
+		t.Fatalf("snapshot exists after delete = %v, %v", exists, err)
 	}
 	var count int
 	if err := db.QueryRow(ctx, `SELECT count(*) FROM snapshots WHERE workflow_id = $1`, dbID).Scan(&count); err != nil || count != 0 {

@@ -14,6 +14,7 @@ import (
 type SnapshotRepository struct{ db *pgxpool.Pool }
 
 var _ snapshot.Store = (*SnapshotRepository)(nil)
+var _ snapshot.Reader = (*SnapshotRepository)(nil)
 
 func NewSnapshotRepository(db *pgxpool.Pool) *SnapshotRepository {
 	return &SnapshotRepository{db: db}
@@ -49,4 +50,17 @@ func (r *SnapshotRepository) Delete(ctx context.Context, workflowID uuid.UUID) e
 		return fmt.Errorf("delete snapshot for workflow %s: %w", workflowID, err)
 	}
 	return nil
+}
+
+func (r *SnapshotRepository) Exists(ctx context.Context, workflowID uuid.UUID) (bool, error) {
+	if workflowID == uuid.Nil() {
+		return false, errors.New("workflow ID must not be nil")
+	}
+	var exists bool
+	if err := r.db.QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1 FROM snapshots WHERE workflow_id = $1
+	)`, pgtype.UUID{Bytes: [16]byte(workflowID), Valid: true}).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check snapshot for workflow %s: %w", workflowID, err)
+	}
+	return exists, nil
 }

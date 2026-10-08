@@ -98,6 +98,9 @@ func TestConcurrencyLimitQueueCapacityAndDrain(t *testing.T) {
 		if err := pool.Start(ctx); err != nil {
 			t.Fatal(err)
 		}
+		if got := pool.AvailableSlots(); got != queueSize {
+			t.Fatalf("initial available slots = %d, want %d", got, queueSize)
+		}
 		release := make(chan struct{})
 		var running, completed atomic.Int32
 		task := func(ctx context.Context) {
@@ -125,6 +128,9 @@ func TestConcurrencyLimitQueueCapacityAndDrain(t *testing.T) {
 		}
 		if err := pool.Push(ctx, task); !errors.Is(err, ErrQueueIsFull) {
 			t.Fatalf("Push into full queue = %v", err)
+		}
+		if got := pool.AvailableSlots(); got != 0 {
+			t.Fatalf("full queue available slots = %d", got)
 		}
 		synctest.Wait()
 		if got := running.Load(); got != workers {

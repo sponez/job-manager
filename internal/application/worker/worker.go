@@ -94,6 +94,20 @@ func (wp *WorkerPool) Push(ctx context.Context, task Task) error {
 	}
 }
 
+// AvailableSlots is a snapshot of queue space for callers that batch work.
+// Admission can still change before Push, so callers must handle ErrQueueIsFull.
+func (wp *WorkerPool) AvailableSlots() int {
+	wp.mx.Lock()
+	defer wp.mx.Unlock()
+	if !wp.started || wp.closed || wp.ctx.Err() != nil {
+		return 0
+	}
+	if cap(wp.queue) == 0 {
+		return wp.workerCount
+	}
+	return cap(wp.queue) - len(wp.queue)
+}
+
 // Start launches workers once. Cancellation stops workers and may leave queued
 // tasks unexecuted; running tasks receive the cancellation through ctx.
 func (wp *WorkerPool) Start(ctx context.Context) error {
