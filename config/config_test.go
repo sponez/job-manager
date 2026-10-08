@@ -16,7 +16,7 @@ const testTemplate = "postgres://{db_user}:{db_password}@localhost:5432/job_mana
 
 func cleanEnvironment(t *testing.T) {
 	t.Helper()
-	for _, name := range []string{"USE_POSTGRES", "HTTP_ADDR", "DB_URL", "DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME", "PGSERVICE", "PGSERVICEFILE", "PGSSLMODE", "PGSSLROOTCERT", "PGSSLCERT", "PGSSLKEY", "PGCONNECT_TIMEOUT", "PGPORT"} {
+	for _, name := range []string{"HTTP_ADDR", "DB_URL", "DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME", "PGSERVICE", "PGSERVICEFILE", "PGSSLMODE", "PGSSLROOTCERT", "PGSSLCERT", "PGSSLKEY", "PGCONNECT_TIMEOUT", "PGPORT"} {
 		t.Setenv(name, "")
 		if err := os.Unsetenv(name); err != nil {
 			t.Fatal(err)
@@ -40,7 +40,6 @@ func TestLoadAppDefaultsAndOverrides(t *testing.T) {
 			wantPool := PoolConfig{MaxConns: 10, MinConns: 0, MaxConnLifetime: time.Hour}
 			wantAddr := ":8080"
 			if override {
-				t.Setenv("USE_POSTGRES", "true")
 				t.Setenv("HTTP_ADDR", "[::1]:9090")
 				t.Setenv("DB_MAX_CONNS", "20")
 				t.Setenv("DB_MIN_CONNS", "2")
@@ -52,7 +51,7 @@ func TestLoadAppDefaultsAndOverrides(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !cfg.UsePostgres || cfg.Pool != wantPool || cfg.HTTPAddr != wantAddr {
+			if cfg.Pool != wantPool || cfg.HTTPAddr != wantAddr {
 				t.Fatalf("unexpected pool or HTTP settings: %v, %s", cfg.Pool, cfg.HTTPAddr)
 			}
 			db, err := loadDatabase(context.Background(), testSecrets)
@@ -63,38 +62,8 @@ func TestLoadAppDefaultsAndOverrides(t *testing.T) {
 	}
 }
 
-func TestLoadAppMemoryDoesNotReadDatabaseSettingsOrVault(t *testing.T) {
-	cleanEnvironment(t)
-	t.Setenv("USE_POSTGRES", "false")
-	t.Setenv("HTTP_ADDR", ":9090")
-	for _, name := range []string{"DB_URL", "DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME"} {
-		t.Setenv(name, "invalid")
-	}
-	cfg, err := loadApp(context.Background(), func(context.Context) (map[string]any, error) {
-		t.Fatal("memory mode must not read Vault")
-		return nil, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.UsePostgres || cfg.HTTPAddr != ":9090" || cfg.Database != (DatabaseConfig{}) || cfg.Pool != (PoolConfig{}) {
-		t.Fatal("unexpected configuration for memory mode")
-	}
-}
-
-func TestLoadAppMemoryStillValidatesHTTPAddress(t *testing.T) {
-	cleanEnvironment(t)
-	t.Setenv("USE_POSTGRES", "false")
-	t.Setenv("HTTP_ADDR", "invalid")
-	_, err := loadApp(context.Background(), testSecrets)
-	if err == nil || !strings.Contains(err.Error(), "HTTP_ADDR") {
-		t.Fatalf("error = %v, want HTTP_ADDR validation error", err)
-	}
-}
-
 func TestLoadAppRejectsInvalidSettingsBeforeVault(t *testing.T) {
 	cases := map[string][]string{
-		"USE_POSTGRES":         {"", "invalid"},
 		"HTTP_ADDR":            {"", "localhost", "http://localhost:8080", "localhost:abc", ":65536", ":-1", "bad host:80"},
 		"DB_MAX_CONNS":         {"", "0", "-1", "2147483648", "nope"},
 		"DB_MIN_CONNS":         {"", "-1", "11", "2147483648", "nope"},
@@ -119,7 +88,6 @@ func TestLoadAppRejectsInvalidSettingsBeforeVault(t *testing.T) {
 
 func TestLoadDatabaseEscapesCredentialsAndIgnoresAppSettings(t *testing.T) {
 	cleanEnvironment(t)
-	t.Setenv("USE_POSTGRES", "false")
 	for _, name := range []string{"HTTP_ADDR", "DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME"} {
 		t.Setenv(name, "invalid")
 	}

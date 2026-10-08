@@ -98,6 +98,9 @@ func TestConcurrencyLimitQueueCapacityAndDrain(t *testing.T) {
 		if err := pool.Start(ctx); err != nil {
 			t.Fatal(err)
 		}
+		if got := pool.AvailableSlots(); got != queueSize {
+			t.Fatalf("initial available slots = %d, want %d", got, queueSize)
+		}
 		release := make(chan struct{})
 		var running, completed atomic.Int32
 		task := func(ctx context.Context) {
@@ -109,7 +112,7 @@ func TestConcurrencyLimitQueueCapacityAndDrain(t *testing.T) {
 			running.Add(-1)
 			completed.Add(1)
 		}
-		for i := 0; i < workers; i++ {
+		for range workers {
 			if err := pool.Push(ctx, task); err != nil {
 				t.Fatal(err)
 			}
@@ -118,13 +121,16 @@ func TestConcurrencyLimitQueueCapacityAndDrain(t *testing.T) {
 		if got := running.Load(); got != workers {
 			t.Fatalf("running tasks = %d, want %d", got, workers)
 		}
-		for i := 0; i < queueSize; i++ {
+		for range queueSize {
 			if err := pool.Push(ctx, task); err != nil {
 				t.Fatal(err)
 			}
 		}
 		if err := pool.Push(ctx, task); !errors.Is(err, ErrQueueIsFull) {
 			t.Fatalf("Push into full queue = %v", err)
+		}
+		if got := pool.AvailableSlots(); got != 0 {
+			t.Fatalf("full queue available slots = %d", got)
 		}
 		synctest.Wait()
 		if got := running.Load(); got != workers {
@@ -133,7 +139,7 @@ func TestConcurrencyLimitQueueCapacityAndDrain(t *testing.T) {
 
 		// Every simultaneous Shutdown must wait for the running tasks.
 		var stopped atomic.Int32
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			go func() {
 				pool.Shutdown()
 				stopped.Add(1)
@@ -263,7 +269,7 @@ func TestConcurrentLifecycle(t *testing.T) {
 	var calls sync.WaitGroup
 	var accepted, executed atomic.Int32
 	begin := make(chan struct{})
-	for i := 0; i < 48; i++ {
+	for i := range 48 {
 		calls.Go(func() {
 			<-begin
 			switch i % 3 {
@@ -273,7 +279,7 @@ func TestConcurrentLifecycle(t *testing.T) {
 					t.Errorf("Start = %v", err)
 				}
 			case 1:
-				for j := 0; j < 32; j++ {
+				for range 32 {
 					err := pool.Push(ctx, func(context.Context) { executed.Add(1) })
 					if err == nil {
 						accepted.Add(1)
